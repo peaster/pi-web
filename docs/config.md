@@ -27,7 +27,9 @@ defaults → global config file → environment overrides
 
 Supported project-local settings are then applied for that project's workspaces. For upload defaults, `<project>/.pi-web/config.json` overrides the global value.
 
-Environment overrides include `PI_WEB_HOST`, `PI_WEB_PORT` / `PORT`, `PI_WEB_ALLOWED_HOSTS`, `PI_WEB_MAX_UPLOAD_BYTES`, `PI_WEB_SPAWN_SESSIONS`, and `PI_WEB_SUBSESSIONS`.
+Environment overrides include `PI_WEB_HOST`, `PI_WEB_PORT` / `PORT`, `PI_WEB_ALLOWED_HOSTS`, `PI_WEB_AUTH_TOKEN`, `PI_WEB_MAX_UPLOAD_BYTES`, `PI_WEB_SPAWN_SESSIONS`, and `PI_WEB_SUBSESSIONS`.
+
+`allowedHosts` is enforced as a `Host`-header allowlist on the running web/API server (loopback names and IP literals are always accepted), which blocks DNS-rebinding access; leaving it unset keeps the previous accept-all behavior. `PI_WEB_AUTH_TOKEN` is an optional shared secret required on every request; it is read only from the environment and never stored in or returned by the config API. See [Reverse-proxy authentication](reverse-proxy-auth.md) for a ready-to-use setup.
 
 Process restarts depend on the key:
 
@@ -98,7 +100,8 @@ Rows with JSON key `—` are runtime-only environment variables, not config-file
 | **Config-file keys** |  |  |  |  |  |
 | Web/API bind host | `host` | `PI_WEB_HOST` | Global | Not supported locally | Restart web/API |
 | Web/API port | `port` | `PI_WEB_PORT`, `PORT` | Global | Not supported locally | Restart web/API |
-| Dev-server allowed hosts | `allowedHosts` | `PI_WEB_ALLOWED_HOSTS` | Global | Not supported locally | Restart dev web/UI |
+| Allowed hosts | `allowedHosts` | `PI_WEB_ALLOWED_HOSTS` | Global | Not supported locally | Restart web/API and dev web/UI |
+| Shared-secret gate | — | `PI_WEB_AUTH_TOKEN` | Global | Not supported locally | Restart web/API |
 | External filesystem roots | `pathAccess.allowedPaths` | — | Global + project | **Merges**: global roots first, then project roots; duplicates removed | Next file request; refresh existing views if needed |
 | Manual file upload default folder | `uploads.defaultFolder` | — | Global + project | **Overrides**: project value wins for workspaces in that project; otherwise global/default applies | New Upload dialogs and direct drag/drop batches after config/workspace refresh |
 | Upload/body limit | `maxUploadBytes` | `PI_WEB_MAX_UPLOAD_BYTES` | Global | Not supported locally | Restart web/API and session daemon on that machine |
