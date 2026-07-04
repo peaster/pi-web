@@ -68,6 +68,7 @@ From a production/runtime install directory, run `./pi-web-docker <command>`. Fr
 | Command | Runtime/default | Development | Notes |
 | --- | --- | --- | --- |
 | `install` | one-liner above or `./pi-web-docker install [installer args]` | Not available | Production bootstrap/install only; accepts the installer options below. |
+| `uninstall` | `./pi-web-docker uninstall [--purge-data]` | Not available | Removes the stack and built image; `--purge-data` also deletes persistent data and the install directory. Run from the host. |
 | `start` | `./pi-web-docker start` | `./docker/pi-web-docker --dev start` | Starts the split `web` and `sessiond` stack. |
 | `stop` | `./pi-web-docker stop` | `./docker/pi-web-docker --dev stop` | Stops containers without deleting persistent data. |
 | `restart` | `./pi-web-docker restart` | `./docker/pi-web-docker --dev restart` | Restarts `web` and `sessiond`. |
@@ -196,6 +197,35 @@ ref=<git-ref>
 curl -fsSL "https://raw.githubusercontent.com/jmfederico/pi-web/$ref/docker/install.sh" \
   | sh -s -- --asset-ref "$ref"
 ```
+
+## Uninstall
+
+Remove the runtime from the **host** (not from inside a container):
+
+```bash
+cd ~/.local/share/pi-web-docker
+./pi-web-docker uninstall
+```
+
+This stops and removes the `web` and `sessiond` containers and their network,
+and removes the built runtime image (`pi-web:local` by default). Persistent data
+under the data directory and the install directory are kept, and their paths are
+printed so you can remove them by hand if you want.
+
+To also delete the persistent data (session history, Pi config, agent state)
+and the install directory in one step:
+
+```bash
+./pi-web-docker uninstall --purge-data
+```
+
+`--purge-data` is irreversible. The command reads the install/data locations
+from the generated `.env`, so custom `PI_WEB_DOCKER_DATA_DIR` or
+`COMPOSE_PROJECT_NAME` values are handled automatically. The `hostexec` helper
+image (`alpine:3.22` by default) and any dangling build layers are left in
+place; remove them with `docker image rm alpine:3.22` and `docker image prune`
+if desired. Reverse-proxy configuration (e.g. Nginx Proxy Manager hosts or
+Authelia rules) is not touched and should be removed separately.
 
 ## Localhost binding and remote access
 

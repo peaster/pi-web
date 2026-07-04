@@ -19,6 +19,10 @@ explicitly with --dev.
 
 Commands:
   install                 Run the production one-line/bootstrap installer
+  uninstall [--purge-data]
+                          Remove the PI WEB Docker stack and built image. With
+                          --purge-data, also delete the persistent data and the
+                          install directory. Run from the host, not a container.
   start                   Start the PI WEB Docker stack
   stop                    Stop the PI WEB Docker stack without deleting data
   restart                 Restart web and sessiond
@@ -349,6 +353,71 @@ run_install() {
   [ "$(docker_mode)" = runtime ] || die "install is only available in runtime mode; omit --dev"
   installer=$(entrypoint_installer)
   exec "$installer" "$@"
+}
+
+remove_directory_safely() {
+  target=${1:-}
+  label=${2:-directory}
+  [ -n "$target" ] || return 0
+  case "$target" in
+    /*) ;;
+    *) die "refusing to remove $label with a non-absolute path: $target" ;;
+  esac
+  [ "$target" != / ] || die "refusing to remove $label at the filesystem root: $target"
+  [ -e "$target" ] || return 0
+  log "Removing $label: $target"
+  ( cd / && rm -rf -- "$target" ) || die "could not remove $label: $target"
+}
+
+run_uninstall() {
+  purge_data=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --purge-data) purge_data=1; shift ;;
+      *) die "uninstall accepts only --purge-data" ;;
+    esac
+  done
+
+  [ "$(docker_mode)" = runtime ] || die "uninstall is only available in runtime mode; omit --dev"
+  ! is_truthy "${PI_WEB_DOCKER_RUNTIME:-}" || die "uninstall must be run from the host, not inside a PI WEB Docker container"
+  require_command docker
+
+  root=$(runtime_root)
+  require_runtime_compose_assets "$root"
+  env_file=$root/.env
+
+  # Stop and remove containers and networks. --volumes also drops any named
+  # volumes when purging; bind-mounted data is removed by directory removal.
+  if [ "$purge_data" = 1 ]; then
+    runtime_compose down --remove-orphans --volumes
+  else
+    runtime_compose down --remove-orphans
+  fi
+
+  # Remove the built runtime image. Best-effort: it may be shared or absent.
+  image=$(env_file_value "$env_file" PI_WEB_IMAGE 2>/dev/null || true)
+  [ -n "$image" ] || image=pi-web:local
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    log "Removing PI WEB runtime image: $image"
+    docker image rm "$image" >/dev/null 2>&1 || log "pi-web-docker: could not remove image $image (it may be in use); remove it manually with: docker image rm $image"
+  fi
+
+  data_dir=$(env_file_value "$env_file" PI_WEB_DOCKER_DATA_DIR 2>/dev/null || true)
+
+  if [ "$purge_data" != 1 ]; then
+    log ""
+    log "PI WEB Docker stack removed. Persistent data was kept."
+    [ -z "$data_dir" ] || log "  Data directory:    $data_dir"
+    log "  Install directory: $root"
+    log ""
+    log "To also delete data and installed assets, rerun: pi-web-docker uninstall --purge-data"
+    return 0
+  fi
+
+  remove_directory_safely "$data_dir" "data directory"
+  remove_directory_safely "$root" "install directory"
+  log ""
+  log "PI WEB Docker runtime uninstalled and data purged."
 }
 
 run_start() {
@@ -718,6 +787,9 @@ case "$command_name" in
     ;;
   install)
     run_install "$@"
+    ;;
+  uninstall)
+    run_uninstall "$@"
     ;;
   start|stop|status|logs|shell|doctor|cli|update|restart|restart-web|restart-sessiond|__run-detached)
     enforce_dev_root_safety

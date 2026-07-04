@@ -167,6 +167,8 @@ PI WEB assumes trusted users, trusted repositories, and trusted server paths.
 
 It is not a sandbox, permission system, or multi-tenant platform. Do not expose it directly to the public internet without a trusted network, firewall, VPN, SSH tunnel, or authenticated reverse proxy.
 
+For a hardened remote setup, set `PI_WEB_ALLOWED_HOSTS` (enforced Host-header allowlist), optionally `PI_WEB_AUTH_TOKEN` (shared-secret gate), and put forward-auth in front of PI WEB. See the [reverse-proxy authentication guide](docs/reverse-proxy-auth.md).
+
 ## Documentation
 
 - [Website](https://pi-web.dev/)

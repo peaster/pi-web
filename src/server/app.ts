@@ -28,6 +28,7 @@ import { MachineService } from "./machines/machineService.js";
 import { registerMachineRoutes } from "./machines/machineRoutes.js";
 import { registerMachineProxyRoutes } from "./machines/machineProxyRoutes.js";
 import { proxyMachinePluginAsset, registerMachinePluginProxyRoutes } from "./machines/machinePluginProxyRoutes.js";
+import { createRequestGuard, type RequestGuardOptions } from "./security/requestGuard.js";
 import type { Project, Workspace } from "./types.js";
 
 export interface AppDependencies {
@@ -42,6 +43,8 @@ export interface AppDependencies {
   logger?: FastifyServerOptions["logger"];
   /** Maximum accepted HTTP request body size in bytes. */
   bodyLimit?: number;
+  /** Network-facing request guard (Host allowlist, WebSocket origin, optional shared secret). */
+  security?: RequestGuardOptions;
 }
 
 interface LocalProjectRouteOptions {
@@ -120,7 +123,12 @@ function registerLocalFileSuggestionRoutes(app: FastifyInstance, projects: Proje
 
 export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? true, ...(deps.bodyLimit === undefined ? {} : { bodyLimit: deps.bodyLimit }) });
+  app.addHook("onRequest", createRequestGuard(deps.security ?? {}));
   await app.register(fastifyWebsocket);
+
+  // Always-public liveness probe so container/reverse-proxy health checks keep
+  // working even when a shared-secret gate (PI_WEB_AUTH_TOKEN) is configured.
+  app.get("/livez", () => ({ ok: true }));
 
   const projects = deps.projects ?? new ProjectService(new ProjectStore());
   const workspaces = deps.workspaces ?? new WorkspaceService();
