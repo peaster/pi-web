@@ -268,6 +268,59 @@ describe("Docker command assets", () => {
     expect(result.stderr).toContain("PI_WEB_DOCKER_INSTALL_DIR");
   });
 
+  dockerCommandIt("removes the runtime stack on uninstall while keeping data by default", async () => {
+    const installDir = await createRuntimeInstall();
+    const dataDir = join(installDir, "data");
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(join(dataDir, "keep.txt"), "state", "utf8");
+    const fakeDocker = await installFakeDocker();
+
+    const result = await runDockerCommand(["uninstall"], runtimeHostEnv(fakeDocker, installDir));
+
+    const log = await readFile(fakeDocker.logPath, "utf8");
+    expect(log).toContain("compose --project-name pi-web-test --env-file .env -f compose.yml -f compose.override.yml down --remove-orphans");
+    expect(log).not.toContain("down --remove-orphans --volumes");
+    expect(result.stderr).toContain("Persistent data was kept");
+    expect(result.stderr).toContain(dataDir);
+    expect(await readFile(join(dataDir, "keep.txt"), "utf8")).toBe("state");
+  });
+
+  dockerCommandIt("deletes data and install assets on uninstall --purge-data", async () => {
+    const installDir = await createRuntimeInstall();
+    const dataDir = join(installDir, "data");
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(join(dataDir, "keep.txt"), "state", "utf8");
+    const fakeDocker = await installFakeDocker();
+
+    const result = await runDockerCommand(["uninstall", "--purge-data"], runtimeHostEnv(fakeDocker, installDir));
+
+    const log = await readFile(fakeDocker.logPath, "utf8");
+    expect(log).toContain("compose --project-name pi-web-test --env-file .env -f compose.yml -f compose.override.yml down --remove-orphans --volumes");
+    expect(result.stderr).toContain("data purged");
+    await expect(readFile(join(dataDir, "keep.txt"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(installDir, ".env"), "utf8")).rejects.toThrow();
+  });
+
+  dockerCommandIt("refuses to uninstall from inside a PI WEB Docker container", async () => {
+    const installDir = await createRuntimeInstall();
+    const fakeDocker = await installFakeDocker();
+
+    const result = await runDockerCommandAllowFailure(["uninstall"], runtimeEnv(fakeDocker, installDir));
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("uninstall must be run from the host");
+  });
+
+  dockerCommandIt("rejects unknown uninstall arguments", async () => {
+    const installDir = await createRuntimeInstall();
+    const fakeDocker = await installFakeDocker();
+
+    const result = await runDockerCommandAllowFailure(["uninstall", "--wipe"], runtimeHostEnv(fakeDocker, installDir));
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("uninstall accepts only --purge-data");
+  });
+
   dockerCommandIt("starts restart-sessiond in a detached Docker helper", async () => {
     const installDir = await createRuntimeInstall();
     const fakeDocker = await installFakeDocker();
